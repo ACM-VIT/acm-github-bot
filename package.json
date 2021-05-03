@@ -16,6 +16,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "firebase": "^8.4.3",
     "probot": "^11.0.1"
   },
   "devDependencies": {
