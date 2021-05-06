@@ -1,0 +1,31 @@
+{
+    "env": {
+      "browser": true,
+      "es6": true
+    },
+    "extends": ["airbnb", "prettier"],
+    "globals": {
+      "Atomics": "readonly",
+      "SharedArrayBuffer": "readonly"
+    },
+    "parserOptions": {
+      "ecmaFeatures": {
+        "jsx": true
+      },
+      "ecmaVersion": 2018,
+      "sourceType": "module"
+    },
+    "plugins": ["react-hooks", "prettier"],
+    "rules": {
+      "jsx-a11y/no-noninteractive-element-interactions": "off",
+      "jsx-a11y/click-events-have-key-events": "off",
+      "react/jsx-props-no-spreading": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "react/jsx-curly-newline": "off",
+      "no-underscore-dangle": "off",
+      "no-param-reassign": "off",
+      "no-unused-vars": "warn",
+      "global-require": "off",
+      "no-console": "off"
+    }
+  }
