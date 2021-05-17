@@ -1,13 +1,26 @@
-const firebase= require("./config")
+const firebase = require("./config")
+const express = require("express")
 var fdb = firebase.database();
 
 /**
  * This is the main entrypoint to your Probot app
- * @param {import('probot').Probot} app
+ * @param {import('probot').Application} app
  */
 
+labels = {
+  "enhancement": 5,
+  "bug": 10,
+  "documentation": 50
+}
 
-module.exports = (app) => {
+
+module.exports = (app, { getRouter }) => {
+  const router = getRouter("/my-app");
+  // app.set('views', './views')
+  // app.set('view engine', 'ejs')
+
+  router.use(express.static("public"));
+
   const adminUsernames = [];
   app.log.info("Yay, the app was loaded!");
 
@@ -23,20 +36,19 @@ module.exports = (app) => {
     if (!issue.closed_at) {
       var last_score
       app.log(`Issue Opened: ${issue.id}`);
-      await fdb.ref("Scores").once("value", function(snapshot){
-        last_score = snapshot.child(issue.user.login+"/score").val();
-        
+      await fdb.ref("Scores").once("value", function (snapshot) {
+        last_score = snapshot.child(issue.user.login + "/score").val();
+
       })
       console.log(last_score);
-      fdb.ref("Scores/"+issue.user.login).set({
-        "score":5+last_score
+      fdb.ref("Scores/" + issue.user.login).set({
+        "score": 5 + last_score
       })
 
       const comment = context.issue({
         body: `Thanks @${issue.user.login}, for raising the issue!  🙌
   One of our team mates will revert on this soon. ✅`,
       });
-
       return context.octokit.issues.createComment(comment);
     }
   });
@@ -54,6 +66,19 @@ module.exports = (app) => {
     const issueComment = context.issue({
       body: "Thanks for closing this issue!",
     });
+    const issue = context.payload.issue;
+    var list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
+    data = list["data"][0]
+    label = data.name
+    console.log(label)
+    await fdb.ref("Scores").once("value", function (snapshot) {
+      last_score = snapshot.child(issue.user.login + "/score").val();
+
+    })
+    console.log(labels[label]);
+    fdb.ref("Scores/" + issue.user.login).set({
+      "score": last_score + labels[label]
+    })
     return context.octokit.issues.createComment(issueComment);
   });
 
@@ -90,11 +115,20 @@ module.exports = (app) => {
         body: `Congratualtions @${pr.user.login}, your pull request is merged! 🎉 
   Thanks for your contributions.🙌`,
       });
-
       return context.octokit.issues.createComment(comment);
     }
   });
 
+  router.get("", (req, res) => {
+    let childKey, childData
+    fdb.ref('Scores').once('value', async function (snapshot) {
+      snapshot.forEach(async function (childSnapshot) {
+        childKey = childSnapshot.key;
+        childData = childSnapshot.val();
+        res.render("index.pug", { user: "Swarup", keys: childKey, childs: childData });
+      });
+    });
+  });
 };
 
 
