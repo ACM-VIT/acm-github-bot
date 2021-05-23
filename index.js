@@ -67,18 +67,25 @@ module.exports = (app, { getRouter }) => {
       body: "Thanks for closing this issue!",
     });
     const issue = context.payload.issue;
+    var timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
+    app.log(timeline)
     var list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
     data = list["data"][0]
-    label = data.name
-    console.log(label)
-    await fdb.ref("Scores").once("value", function (snapshot) {
-      last_score = snapshot.child(issue.user.login + "/score").val();
+    try {
+      label = data.name
+      console.log(label)
+      await fdb.ref("Scores").once("value", function (snapshot) {
+        last_score = snapshot.child(issue.user.login + "/score").val();
 
-    })
-    console.log(labels[label]);
-    fdb.ref("Scores/" + issue.user.login).set({
-      "score": last_score + labels[label]
-    })
+      })
+      console.log(labels[label]);
+      fdb.ref("Scores/" + issue.user.login).set({
+        "score": last_score + labels[label]
+      })
+    }
+    catch {
+      app.log("Issue not labelled")
+    }
     return context.octokit.issues.createComment(issueComment);
   });
 
@@ -101,6 +108,11 @@ module.exports = (app, { getRouter }) => {
     }
   });
 
+  app.on("pull_request_review_comment.created", async (context) => {
+    const pr = context.payload.pull_request_review_comment;
+    app.log(`Pull request linked ${pr}`);
+  });
+
   //pull request closed
   app.on("pull_request.closed", async (context) => {
     const pr = context.payload.pull_request;
@@ -120,13 +132,9 @@ module.exports = (app, { getRouter }) => {
   });
 
   router.get("", (req, res) => {
-    let childKey, childData
-    fdb.ref('Scores').once('value', async function (snapshot) {
-      snapshot.forEach(async function (childSnapshot) {
-        childKey = childSnapshot.key;
-        childData = childSnapshot.val();
-        res.render("index.pug", { user: "Swarup", keys: childKey, childs: childData });
-      });
+    fdb.ref('Scores').on('value', async function (snapshot) {
+      app.log(snapshot.val())
+      res.send(snapshot.val());
     });
   });
 };
