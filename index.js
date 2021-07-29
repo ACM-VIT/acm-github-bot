@@ -43,6 +43,7 @@ module.exports = (app, { getRouter }) => {
   //issues labelled
   app.on("issues.labeled", async (context) => {
     const issue = context.payload.issue;
+    console.log(issue)
     const issueComment = context.issue({
       body: "This issue has been approved by the owner and is open to solve!"
     });
@@ -58,7 +59,10 @@ module.exports = (app, { getRouter }) => {
       "issues": last_issues + 1,
       "pullRequests": last_pullRequests
     })
-
+    const comment = context.issue({
+      body: `@${issue.user.login} got 5 Points`,
+    })
+    context.octokit.issues.createComment(comment)
     return context.octokit.issues.createComment(issueComment);
   });
 
@@ -69,29 +73,41 @@ module.exports = (app, { getRouter }) => {
     });
     const issue = context.payload.issue;
     let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
-    app.log(JSON.parse(JSON.stringify(timeline)))
-    //timeline.data.forEach(e=>{try{console.log(e.source.issue.pull_request)} catch{console.log("error")}})
-    let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
-    data = list["data"][0]
-    try {
-      label = data.name
-      console.log(label)
-      let last_score, last_issues
-      await fdb.ref("Scores").once("value", function (snapshot) {
-        last_score = snapshot.child(issue.user.login + "/finalScore").val();
-        last_issues = snapshot.child(issue.user.login + "/issues").val();
-        last_pullRequests = snapshot.child(issue.user.login + "/pullRequests").val();
-      })
-      console.log(last_score);
-      fdb.ref("Scores/" + issue.user.login).set({
-        "finalScore": labels[label] + last_score,
-        "issues": last_issues,
-        "pullRequests": last_pullRequests + 1
-      })
-    }
-    catch {
-      app.log("Issue not labelled")
-    }
+    // app.log(JSON.parse(JSON.stringify(timeline)))
+    timeline.data.forEach(async (e) => {
+      try {
+        if (e.source.issue.pull_request) {
+          // console.log(e.source.issue.pull_request)
+          let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
+          data = list["data"][0]
+          try {
+            label = data.name
+            console.log(label)
+            let last_score, last_issues
+            await fdb.ref("Scores").once("value", function (snapshot) {
+              last_score = snapshot.child(e.actor.login + "/finalScore").val();
+              last_issues = snapshot.child(e.actor.login + "/issues").val();
+              last_pullRequests = snapshot.child(e.actor.login + "/pullRequests").val();
+            })
+            console.log(last_score);
+            fdb.ref("Scores/" + e.actor.login).set({
+              "finalScore": labels[label] + last_score,
+              "issues": last_issues,
+              "pullRequests": last_pullRequests + 1
+            })
+            const comment = context.issue({
+              body: `@${issue.user.login} got ${labels[label]} Points`,
+            })
+            context.octokit.issues.createComment(comment)
+          }
+          catch {
+            app.log("Issue not labelled")
+          }
+        }
+      } catch {
+        console.log("error")
+      }
+    })
     return context.octokit.issues.createComment(issueComment);
   });
 
