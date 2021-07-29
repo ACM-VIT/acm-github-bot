@@ -7,7 +7,7 @@ var fdb = firebase.database();
  * @param {import('probot').Application} app
  */
 
-labels = {
+const labels = {
   "enhancement": 5,
   "bug": 10,
   "documentation": 50
@@ -16,10 +16,6 @@ labels = {
 
 module.exports = (app, { getRouter }) => {
   const router = getRouter("/my-app");
-  // app.set('views', './views')
-  // app.set('view engine', 'ejs')
-
-  router.use(express.static("public"));
 
   const adminUsernames = [];
   app.log.info("Yay, the app was loaded!");
@@ -34,16 +30,7 @@ module.exports = (app, { getRouter }) => {
       return;
     }
     if (!issue.closed_at) {
-      var last_score
       app.log(`Issue Opened: ${issue.id}`);
-      await fdb.ref("Scores").once("value", function (snapshot) {
-        last_score = snapshot.child(issue.user.login + "/score").val();
-
-      })
-      console.log(last_score);
-      fdb.ref("Scores/" + issue.user.login).set({
-        "score": 5 + last_score
-      })
 
       const comment = context.issue({
         body: `Thanks @${issue.user.login}, for raising the issue!  🙌
@@ -55,9 +42,23 @@ module.exports = (app, { getRouter }) => {
 
   //issues labelled
   app.on("issues.labeled", async (context) => {
+    const issue = context.payload.issue;
     const issueComment = context.issue({
       body: "This issue has been approved by the owner and is open to solve!"
     });
+    let last_score, last_issues, last_pullRequests
+    await fdb.ref("Scores").once("value", function (snapshot) {
+      last_score = snapshot.child(issue.user.login + "/finalScore").val();
+      last_issues = snapshot.child(issue.user.login + "/issues").val();
+      last_pullRequests = snapshot.child(issue.user.login + "/pullRequests").val();
+    })
+    console.log(last_score);
+    fdb.ref("Scores/" + issue.user.login).set({
+      "finalScore": 5 + last_score,
+      "issues": last_issues + 1,
+      "pullRequests": last_pullRequests
+    })
+
     return context.octokit.issues.createComment(issueComment);
   });
 
@@ -67,20 +68,25 @@ module.exports = (app, { getRouter }) => {
       body: "Thanks for closing this issue!",
     });
     const issue = context.payload.issue;
-    var timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
-    app.log(timeline)
-    var list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
+    let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
+    app.log(JSON.parse(JSON.stringify(timeline)))
+    //timeline.data.forEach(e=>{try{console.log(e.source.issue.pull_request)} catch{console.log("error")}})
+    let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
     data = list["data"][0]
     try {
       label = data.name
       console.log(label)
+      let last_score, last_issues
       await fdb.ref("Scores").once("value", function (snapshot) {
-        last_score = snapshot.child(issue.user.login + "/score").val();
-
+        last_score = snapshot.child(issue.user.login + "/finalScore").val();
+        last_issues = snapshot.child(issue.user.login + "/issues").val();
+        last_pullRequests = snapshot.child(issue.user.login + "/pullRequests").val();
       })
-      console.log(labels[label]);
+      console.log(last_score);
       fdb.ref("Scores/" + issue.user.login).set({
-        "score": last_score + labels[label]
+        "finalScore": labels[label] + last_score,
+        "issues": last_issues,
+        "pullRequests": last_pullRequests + 1
       })
     }
     catch {
@@ -91,6 +97,7 @@ module.exports = (app, { getRouter }) => {
 
   //pull request opened
   app.on("pull_request.opened", async (context) => {
+    app.log("created PR");
     const pr = context.payload.pull_request;
     if (adminUsernames.includes(pr.user.login)) {
       app.log(`Ignoring new pr ${pr.id} opened by admin ${pr.user.login}`);
@@ -131,7 +138,8 @@ module.exports = (app, { getRouter }) => {
     }
   });
 
-  router.get("", (req, res) => {
+  //rout for getting scores
+  router.get("/scores", (req, res) => {
     fdb.ref('Scores').on('value', async function (snapshot) {
       app.log(snapshot.val())
       res.send(snapshot.val());
