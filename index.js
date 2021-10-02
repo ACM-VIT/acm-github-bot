@@ -13,7 +13,7 @@ const scores = {
 
 // set up router
 module.exports = (app, { getRouter }) => {
-  const router = getRouter("/my-app");
+  const router = getRouter("/api");
   const adminUsernames = [];
   app.log.info("Yay, the app was loaded!");
 
@@ -132,6 +132,41 @@ module.exports = (app, { getRouter }) => {
   app.on("pull_request_review_comment.created", async (context) => {
     const pr = context.payload.pull_request_review_comment;
     app.log(`Pull request linked ${pr}`);
+  });
+
+  // pr labeled
+  app.on("pull_request.labeled", async (context) => {
+    app.log("PR Labeled");
+    const pr = context.payload.pull_request;
+    // Update the scores
+
+    console.log(pr)
+
+    let labels = pr.labels
+
+    // split the label
+    label = labels[labels.length - 1].name.toString()
+    console.log(label)
+    let label_name = label.split(" ")
+    console.log(label_name)
+    if (label_name[0] == "Points" || label_name[0] == "points") {
+      let last_score, last_issues, last_pullRequests
+      await fdb.ref("Scores").once("value", function (snapshot) {
+        last_score = snapshot.child(pr.user.login + "/finalScore").val();
+        last_issues = snapshot.child(pr.user.login + "/issues").val();
+        last_pullRequests = snapshot.child(pr.user.login + "/pullRequests").val();
+      })
+      fdb.ref("Scores/" + pr.user.login).set({
+        "finalScore": last_score + parseInt(label_name[1]),
+        "issues": last_issues,
+        "pullRequests": last_pullRequests + 1
+      })
+      const comment = context.issue({
+        body: `@${pr.user.login} got ${label_name[1]} points for this pull request! 🎉`,
+      })
+      context.octokit.issues.createComment(comment)
+    }
+
   });
 
   // pull request closed
