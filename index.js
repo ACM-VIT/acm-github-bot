@@ -14,7 +14,7 @@ const scores = {
 // set up router
 module.exports = (app, { getRouter }) => {
   const router = getRouter("/api");
-  const adminUsernames = [];
+  const adminUsernames = ["yashkumarverma", "avats101", "akri16", "DarthBenro008", "HelixW", "vinamrak", "atg_coder27"];
   app.log.info("Yay, the app was loaded!");
 
   // issues opened
@@ -101,8 +101,8 @@ module.exports = (app, { getRouter }) => {
             app.log("Issue not labelled")
           }
         }
-      } catch {
-        app.log("error")
+      } catch (e) {
+        app.log(e)
       }
     })
     return context.octokit.issues.createComment(issueComment);
@@ -190,8 +190,19 @@ module.exports = (app, { getRouter }) => {
   // route for getting scores
   router.get("/scores", (req, res) => {
     fdb.ref('Scores').on('value', async function (snapshot) {
-      app.log(snapshot.val())
-      res.send(snapshot.val());
+      let scores = snapshot.val()
+
+      // sort the scores
+      let sorted = Object.keys(scores).sort(function (a, b) {
+        return scores[b].finalScore - scores[a].finalScore
+      })
+
+      let sorted_scores = {}
+      sorted.forEach((value) => {
+        sorted_scores[value] = scores[value]
+      })
+      return res.send(
+        sorted_scores);
     });
   });
 };
