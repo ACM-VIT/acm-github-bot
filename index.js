@@ -169,30 +169,40 @@ module.exports = (app, { getRouter }) => {
     console.log(pr)
 
     let labels = pr.labels
+    let label;
+    for (let i = 0; i < labels.length; i++) {
+      label = labels[i].name
+      console.log(label)
+      if (label == "approved") {
+        for (let j = 0; j < labels.length; j++) {
+          let label_name = labels[j].name.split(" ")
+          if (label_name[0] == "points") {
+            // split the label
+            console.log(label_name)
 
-    // split the label
-    label = labels[labels.length - 1].name.toString()
-    console.log(label)
-    let label_name = label.split(" ")
-    console.log(label_name)
+            let comment;
 
-    let comment;
-    if (label_name[0] == "Points" || label_name[0] == "points") {
 
-      // update the scores
-      if (await updateDB(pr.user.login, label_name[1], 0, [], 1, pr.url)) {
-        comment = context.issue({
-          body: `@${pr.user.login} got ${label_name[1]} points for this pull request! 🎉`,
-        })
+            // update the scores
+            if (await updateDB(pr.user.login, label_name[1], 0, [], 1, pr.url)) {
+              comment = context.issue({
+                body: `@${pr.user.login} got ${label_name[1]} points for this pull request! 🎉`,
+              })
+            }
+            else {
+              comment = context.issue({
+                body: `PR already finalised!`,
+              })
+            }
+
+            context.octokit.issues.createComment(comment)
+
+          }
+        }
       }
-      else {
-        comment = context.issue({
-          body: `PR already finalised!`,
-        })
-      }
-
-      context.octokit.issues.createComment(comment)
     }
+
+
 
   });
 
