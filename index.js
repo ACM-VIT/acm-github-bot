@@ -11,6 +11,40 @@ const scores = {
   "issue": 5,
 }
 
+async function updateDB(username, finalScore, issues, issues_urls, pullRequests, pullRequests_urls) {
+  const snapshot = await fdb.ref("Scores").once("value")
+  last_score = snapshot.child(username + "/finalScore").val();
+  last_issues = snapshot.child(username + "/issues").val();
+  last_issues_urls = snapshot.child(username + "/issues_urls").val();
+  last_issues_urls = last_issues_urls ? last_issues_urls : [];
+  last_pullRequests = snapshot.child(username + "/pullRequests").val();
+  last_pullRequests_urls = snapshot.child(username + "/pullRequests_urls").val();
+  last_pullRequests_urls = last_pullRequests_urls ? last_pullRequests_urls : [];
+
+  if (last_pullRequests_urls.includes(pullRequests_urls)) {
+    return false;
+  }
+
+  last_issues_urls.push(issues_urls);
+  last_pullRequests_urls.push(pullRequests_urls);
+
+
+  let obj = {
+    "finalScore": parseInt(last_score) + parseInt(finalScore),
+    "issues": last_issues + issues,
+    "pullRequests": last_pullRequests + pullRequests,
+  }
+  if (last_issues_urls.length != 0) {
+    obj["issues_urls"] = last_issues_urls
+  }
+  if (last_pullRequests_urls.length != 0) {
+    obj["pullRequests_urls"] = last_pullRequests_urls
+  }
+  fdb.ref("Scores/" + username).set(obj)
+  return true;
+}
+
+
 // set up router
 module.exports = (app, { getRouter }) => {
   const router = getRouter("/api");
@@ -32,7 +66,7 @@ module.exports = (app, { getRouter }) => {
     // check if issue is opened
     if (!issue.closed_at) {
       app.log(`Issue Opened: ${issue.id}`);
-      const comment = context.issue({
+      comment = context.issue({
         body: `Thanks @${issue.user.login}, for raising the issue!  🙌
   One of our team mates will revert on this soon. ✅`,
       });
@@ -48,20 +82,12 @@ module.exports = (app, { getRouter }) => {
     });
 
     // Update the scores
-    let last_score, last_issues, last_pullRequests
-    await fdb.ref("Scores").once("value", function (snapshot) {
-      last_score = snapshot.child(issue.user.login + "/finalScore").val();
-      last_issues = snapshot.child(issue.user.login + "/issues").val();
-      last_pullRequests = snapshot.child(issue.user.login + "/pullRequests").val();
-    })
-    fdb.ref("Scores/" + issue.user.login).set({
-      "finalScore": last_score + scores["issue"],
-      "issues": last_issues + 1,
-      "pullRequests": last_pullRequests
-    })
-    const comment = context.issue({
+    updateDB(issue.user.login, scores["issue"], 1, issue.url, 0, [])
+    comment = context.issue({
       body: `@${issue.user.login} got ${scores["issue"]} points for this issue! 🎉`,
     })
+
+
     context.octokit.issues.createComment(comment)
     return context.octokit.issues.createComment(issueComment);
   });
@@ -73,6 +99,7 @@ module.exports = (app, { getRouter }) => {
     });
     const issue = context.payload.issue;
     let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
+    let comment;
     timeline.data.forEach(async (e) => {
       try {
         if (e.source.issue.pull_request) {
@@ -81,20 +108,19 @@ module.exports = (app, { getRouter }) => {
           try {
             label = data.name
             console.log(label)
-            let last_score, last_issues
-            await fdb.ref("Scores").once("value", function (snapshot) {
-              last_score = snapshot.child(e.actor.login + "/finalScore").val();
-              last_issues = snapshot.child(e.actor.login + "/issues").val();
-              last_pullRequests = snapshot.child(e.actor.login + "/pullRequests").val();
-            })
-            fdb.ref("Scores/" + e.actor.login).set({
-              "finalScore": labels[label] + last_score,
-              "issues": last_issues,
-              "pullRequests": last_pullRequests + 1
-            })
-            const comment = context.issue({
-              body: `@${issue.user.login} got ${labels[label]} Points`,
-            })
+
+            // Update the scores
+            if (await updateDB(issue.user.login, labels[label], 0, [], 1, e.source.issue.pull_request.url)) {
+
+              comment = context.issue({
+                body: `@${issue.user.login} got ${labels[label]} Points`,
+              })
+            }
+            else {
+              comment = context.issue({
+                body: `PR already finalised!`,
+              })
+            }
             context.octokit.issues.createComment(comment)
           }
           catch {
@@ -120,7 +146,7 @@ module.exports = (app, { getRouter }) => {
     if (!pr.closed_at) {
       app.log(`Pull Request Opened: ${pr.id}`);
 
-      const comment = context.issue({
+      comment = context.issue({
         body: `Thanks @${pr.user.login}, for opening the pull request!  🙌
   One of our team-mates will review the pull request soon. ✅`,
       });
@@ -143,29 +169,40 @@ module.exports = (app, { getRouter }) => {
     console.log(pr)
 
     let labels = pr.labels
+    let label;
+    for (let i = 0; i < labels.length; i++) {
+      label = labels[i].name
+      console.log(label)
+      if (label == "approved") {
+        for (let j = 0; j < labels.length; j++) {
+          let label_name = labels[j].name.split(" ")
+          if (label_name[0] == "points") {
+            // split the label
+            console.log(label_name)
 
-    // split the label
-    label = labels[labels.length - 1].name.toString()
-    console.log(label)
-    let label_name = label.split(" ")
-    console.log(label_name)
-    if (label_name[0] == "Points" || label_name[0] == "points") {
-      let last_score, last_issues, last_pullRequests
-      await fdb.ref("Scores").once("value", function (snapshot) {
-        last_score = snapshot.child(pr.user.login + "/finalScore").val();
-        last_issues = snapshot.child(pr.user.login + "/issues").val();
-        last_pullRequests = snapshot.child(pr.user.login + "/pullRequests").val();
-      })
-      fdb.ref("Scores/" + pr.user.login).set({
-        "finalScore": last_score + parseInt(label_name[1]),
-        "issues": last_issues,
-        "pullRequests": last_pullRequests + 1
-      })
-      const comment = context.issue({
-        body: `@${pr.user.login} got ${label_name[1]} points for this pull request! 🎉`,
-      })
-      context.octokit.issues.createComment(comment)
+            let comment;
+
+
+            // update the scores
+            if (await updateDB(pr.user.login, label_name[1], 0, [], 1, pr.url)) {
+              comment = context.issue({
+                body: `@${pr.user.login} got ${label_name[1]} points for this pull request! 🎉`,
+              })
+            }
+            else {
+              comment = context.issue({
+                body: `PR already finalised!`,
+              })
+            }
+
+            context.octokit.issues.createComment(comment)
+
+          }
+        }
+      }
     }
+
+
 
   });
 
@@ -179,7 +216,7 @@ module.exports = (app, { getRouter }) => {
     if (!!pr.merged_at) {
       app.log(`Pull Request Closed: ${pr.id}`);
 
-      const comment = context.issue({
+      comment = context.issue({
         body: `Congratualtions @${pr.user.login}, your pull request is merged! 🎉 
   Thanks for your contributions. 🙌`,
       });
