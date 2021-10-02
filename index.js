@@ -1,5 +1,6 @@
 const firebase = require("./config")
-var fdb = firebase.database();
+let fdb = firebase.database();
+// let commands = require('probot-commands');
 
 const labels = {
   "enhancement": 5,
@@ -16,6 +17,25 @@ module.exports = (app, { getRouter }) => {
   const router = getRouter("/my-app");
   const adminUsernames = [];
   app.log.info("Yay, the app was loaded!");
+
+  // commands
+  //   commands(app, "acmbot", (context, command) => {
+  //     const words = command.arguments.split(/, */);
+  //     let words_len = words.length;
+  //     app.log.info('words len - ' + words_len);
+  //     let assign_to = words[1];
+  //     let points = words[2];
+  //     if (words[0] == "assign") {
+  //       app.log.info(assign_to);
+  //       app.log.info(points);
+  //     }
+  //     const comment = context.issue({
+  //       body: `Thanks, for opening the pull request!  🙌
+  // One of our team-mates will review the pull request soon. ✅`,
+  //     });
+
+  //     return context.octokit.issues.createComment(comment);
+  //   });
 
   // issues opened
   app.on("issues.opened", async (context) => {
@@ -127,6 +147,25 @@ module.exports = (app, { getRouter }) => {
 
       return context.octokit.issues.createComment(comment);
     }
+  });
+
+  app.on("pull_request.labeled", async (context) => {
+    app.log("created PR");
+    const pr = context.payload.pull_request;
+    if (adminUsernames.includes(pr.user.login)) {
+      app.log(`Ignoring new pr ${pr.id} opened by admin ${pr.user.login}`);
+      return;
+    }
+
+    app.log(`Pull Request Opened: ${pr.id}`);
+
+    const comment = context.issue({
+      body: `Thanks @${pr.user.login}, for opening the pull request!  🙌
+  One of our team-mates will review the pull request soon. ✅`,
+    });
+
+    return context.octokit.issues.createComment(comment);
+
   });
 
   app.on("pull_request_review_comment.created", async (context) => {
