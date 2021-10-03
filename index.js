@@ -2,9 +2,6 @@ const firebase = require("./config")
 var fdb = firebase.database();
 
 const labels = {
-  "enhancement": 5,
-  "bug": 10,
-  "documentation": 50
 }
 
 const scores = {
@@ -14,10 +11,13 @@ const scores = {
 async function updateDB(username, finalScore, issues, issues_urls, pullRequests, pullRequests_urls) {
   const snapshot = await fdb.ref("Scores").once("value")
   last_score = snapshot.child(username + "/finalScore").val();
+  last_score = last_score ? last_score : 0;
   last_issues = snapshot.child(username + "/issues").val();
+  last_issues = last_issues ? last_issues : 0;
   last_issues_urls = snapshot.child(username + "/issues_urls").val();
   last_issues_urls = last_issues_urls ? last_issues_urls : [];
   last_pullRequests = snapshot.child(username + "/pullRequests").val();
+  last_pullRequests = last_pullRequests ? last_pullRequests : 0;
   last_pullRequests_urls = snapshot.child(username + "/pullRequests_urls").val();
   last_pullRequests_urls = last_pullRequests_urls ? last_pullRequests_urls : [];
 
@@ -36,7 +36,7 @@ async function updateDB(username, finalScore, issues, issues_urls, pullRequests,
   let obj = {
     "finalScore": parseInt(last_score) + parseInt(finalScore),
     "issues": last_issues + issues,
-    "pullRequests": last_pullRequests + pullRequests,
+    "pullRequests": parseInt(last_pullRequests) + parseInt(pullRequests),
   }
   if (last_issues_urls.length != 0) {
     obj["issues_urls"] = last_issues_urls
@@ -82,12 +82,8 @@ module.exports = (app, { getRouter }) => {
   app.on("issues.labeled", async (context) => {
     const issue = context.payload.issue;
 
-    const issueComment = context.issue({
-      body: "This issue has been approved by the owner and is open to solve!"
-    });
-
     let hact_labels = issue.labels.filter(obj => {
-      if (obj.name == "hactoberfest" || obj.name == "Hactoberfest")
+      if (obj.name == "hacktoberfest" || obj.name == "Hacktoberfest")
         return obj.name
     })
 
@@ -96,10 +92,9 @@ module.exports = (app, { getRouter }) => {
       // Update the scores
       if (await updateDB(issue.user.login, scores["issue"], 1, issue.url, 0, [])) {
         comment = context.issue({
-          body: `@${issue.user.login} got ${scores["issue"]} points for this issue! 🎉`,
+          body: `This issue has been approved by the owner and is open to solve!\n@${issue.user.login} got ${scores["issue"]} points for this issue! 🎉`,
         })
-        context.octokit.issues.createComment(comment)
-        return context.octokit.issues.createComment(issueComment);
+        return context.octokit.issues.createComment(comment)
       }
     }
     return
@@ -118,36 +113,34 @@ module.exports = (app, { getRouter }) => {
       return;
     }
 
-    let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
-    let comment;
+    // let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
+    // let comment;
 
-    for (let i = 0; i < timeline.data.length; i++) {
-      let e = timeline.data[i]
-      if (e.event === "connected") {
-        let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
-        data = list["data"][0]
+    // for (let i = 0; i < timeline.data.length; i++) {
+    //   let e = timeline.data[i]
+    //   if (e.event === "connected") {
+    // let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
+    // data = list["data"][0]
 
-        label = data.name
+    // label = data.name
 
-        // Update the scores
-        if (await updateDB(issue.user.login, labels[label], 0, [], 1, "PR")) {
-          console.log("db updated...")
-          comment = context.issue({
-            body: `@${issue.user.login} got ${labels[label]} Points`,
-          })
+    // Update the scores
+    // if (await updateDB(issue.user.login, 0, 0, [], 1, "PR")) {
+    //   console.log("db updated...")
+    //   comment = context.issue({
+    //     body: `@${issue.user.login} got ${labels[label]} Points`,
+    //   })
 
-        }
-        else {
-          comment = context.issue({
-            body: `PR already finalised!`,
-          })
-        }
-        context.octokit.issues.createComment(comment)
-        break
-      }
-
-
-    }
+    // }
+    // else {
+    //   comment = context.issue({
+    //     body: `PR already finalised!`,
+    //   })
+    // }
+    // context.octokit.issues.createComment(comment)
+    //     break
+    //   }
+    // }
     return context.octokit.issues.createComment(issueComment);
   });
 
