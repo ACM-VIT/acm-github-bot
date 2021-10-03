@@ -100,6 +100,7 @@ module.exports = (app, { getRouter }) => {
     const issue = context.payload.issue;
     let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
     let comment;
+    
     for (let i = 0; i < timeline.data.length; i++) {
       let e = timeline.data[i]
       if (e.event === "connected") {
@@ -114,6 +115,7 @@ module.exports = (app, { getRouter }) => {
           comment = context.issue({
             body: `@${issue.user.login} got ${labels[label]} Points`,
           })
+
         }
         else {
           comment = context.issue({
