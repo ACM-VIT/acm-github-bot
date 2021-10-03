@@ -98,6 +98,13 @@ module.exports = (app, { getRouter }) => {
       body: "Thanks for closing this issue!",
     });
     const issue = context.payload.issue;
+
+    // check if user is admin
+    if (adminUsernames.includes(issue.user.login)) {
+      app.log(`Ignoring new issue ${issue.id} created by admin ${issue.user.login}`);
+      return;
+    }
+
     let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
     let comment;
     for (let i = 0; i < timeline.data.length; i++) {
@@ -159,9 +166,11 @@ module.exports = (app, { getRouter }) => {
   app.on("pull_request.labeled", async (context) => {
     app.log("PR Labeled");
     const pr = context.payload.pull_request;
-    // Update the scores
 
-    console.log(pr)
+    if (adminUsernames.includes(pr.user.login)) {
+      app.log(`Ignoring new pr ${pr.id} opened by admin ${pr.user.login}`);
+      return;
+    }
 
     let labels = pr.labels
     let label;
