@@ -25,6 +25,10 @@ async function updateDB(username, finalScore, issues, issues_urls, pullRequests,
     return false;
   }
 
+  if (last_issues_urls.includes(issues_urls)) {
+    return false
+  }
+
   last_issues_urls.push(issues_urls);
   last_pullRequests_urls.push(pullRequests_urls);
 
@@ -77,19 +81,28 @@ module.exports = (app, { getRouter }) => {
   // issues labelled
   app.on("issues.labeled", async (context) => {
     const issue = context.payload.issue;
+
     const issueComment = context.issue({
       body: "This issue has been approved by the owner and is open to solve!"
     });
 
-    // Update the scores
-    updateDB(issue.user.login, scores["issue"], 1, issue.url, 0, [])
-    comment = context.issue({
-      body: `@${issue.user.login} got ${scores["issue"]} points for this issue! 🎉`,
+    let hact_labels = issue.labels.filter(obj => {
+      if (obj.name == "hactoberfest" || obj.name == "Hactoberfest")
+        return obj.name
     })
 
+    if (hact_labels.length > 0) {
 
-    context.octokit.issues.createComment(comment)
-    return context.octokit.issues.createComment(issueComment);
+      // Update the scores
+      if (await updateDB(issue.user.login, scores["issue"], 1, issue.url, 0, [])) {
+        comment = context.issue({
+          body: `@${issue.user.login} got ${scores["issue"]} points for this issue! 🎉`,
+        })
+        context.octokit.issues.createComment(comment)
+        return context.octokit.issues.createComment(issueComment);
+      }
+    }
+    return
   });
 
   // issues closed
@@ -107,7 +120,7 @@ module.exports = (app, { getRouter }) => {
 
     let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
     let comment;
-    
+
     for (let i = 0; i < timeline.data.length; i++) {
       let e = timeline.data[i]
       if (e.event === "connected") {
@@ -183,11 +196,8 @@ module.exports = (app, { getRouter }) => {
         for (let j = 0; j < labels.length; j++) {
           let label_name = labels[j].name.split(" ")
           if (label_name[0] == "points") {
-            // split the label
-            console.log(label_name)
 
             let comment;
-
 
             // update the scores
             if (await updateDB(pr.user.login, label_name[1], 0, [], 1, pr.url)) {
@@ -223,7 +233,7 @@ module.exports = (app, { getRouter }) => {
       app.log(`Pull Request Closed: ${pr.id}`);
 
       comment = context.issue({
-        body: `Congratualtions @${pr.user.login}, your pull request is merged! 🎉 
+        body: `Congratulations @${pr.user.login}, your pull request is merged! 🎉 
   Thanks for your contributions. 🙌`,
       });
       return context.octokit.issues.createComment(comment);
