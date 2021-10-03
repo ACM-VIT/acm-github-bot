@@ -40,6 +40,8 @@ For more, check out the [Contributing Guide](CONTRIBUTING.md).
 ## Authors
 
 **Contributors:** [Swarup Kharul](https://github.com/SwarupKharul), [Ananya Grover](https://github.com/ananyagrover14) 
+
+
 **Mentors:** [Yash Kumar Verma](https://github.com/YashKumarVerma), [Shreyash K](https://github.com/HelixW)
 
 ## License
