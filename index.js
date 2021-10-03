@@ -98,39 +98,43 @@ module.exports = (app, { getRouter }) => {
       body: "Thanks for closing this issue!",
     });
     const issue = context.payload.issue;
+
+    // check if user is admin
+    if (adminUsernames.includes(issue.user.login)) {
+      app.log(`Ignoring new issue ${issue.id} created by admin ${issue.user.login}`);
+      return;
+    }
+
     let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
     let comment;
-    timeline.data.forEach(async (e) => {
-      try {
-        if (e.source.issue.pull_request) {
-          let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
-          data = list["data"][0]
-          try {
-            label = data.name
-            console.log(label)
+    
+    for (let i = 0; i < timeline.data.length; i++) {
+      let e = timeline.data[i]
+      if (e.event === "connected") {
+        let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
+        data = list["data"][0]
 
-            // Update the scores
-            if (await updateDB(issue.user.login, labels[label], 0, [], 1, e.source.issue.pull_request.url)) {
+        label = data.name
 
-              comment = context.issue({
-                body: `@${issue.user.login} got ${labels[label]} Points`,
-              })
-            }
-            else {
-              comment = context.issue({
-                body: `PR already finalised!`,
-              })
-            }
-            context.octokit.issues.createComment(comment)
-          }
-          catch {
-            app.log("Issue not labelled")
-          }
+        // Update the scores
+        if (await updateDB(issue.user.login, labels[label], 0, [], 1, "PR")) {
+          console.log("db updated...")
+          comment = context.issue({
+            body: `@${issue.user.login} got ${labels[label]} Points`,
+          })
+
         }
-      } catch (e) {
-        app.log(e)
+        else {
+          comment = context.issue({
+            body: `PR already finalised!`,
+          })
+        }
+        context.octokit.issues.createComment(comment)
+        break
       }
-    })
+
+
+    }
     return context.octokit.issues.createComment(issueComment);
   });
 
@@ -164,9 +168,11 @@ module.exports = (app, { getRouter }) => {
   app.on("pull_request.labeled", async (context) => {
     app.log("PR Labeled");
     const pr = context.payload.pull_request;
-    // Update the scores
 
-    console.log(pr)
+    if (adminUsernames.includes(pr.user.login)) {
+      app.log(`Ignoring new pr ${pr.id} opened by admin ${pr.user.login}`);
+      return;
+    }
 
     let labels = pr.labels
     let label;
