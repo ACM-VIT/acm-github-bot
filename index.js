@@ -63,7 +63,6 @@ async function updateDB(username, finalScore, issues, issues_urls, pullRequests,
 module.exports = (app, { getRouter }) => {
   const router = getRouter("/api");
   const adminUsernames = require("./usernames.js");
-  console.log(adminUsernames);
   app.log.info("Yay, the app was loaded!");
 
   // issues opened
