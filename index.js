@@ -1,15 +1,20 @@
 const firebase = require("./config")
 var fdb = firebase.database();
 
-const labels = {
-}
+// Can add scores for each Label
+const labels = {}
 
+// Scores for each issue
+// Can add for PR as well
 const scores = {
   "issue": 5,
 }
 
+// Update the scores
 async function updateDB(username, finalScore, issues, issues_urls, pullRequests, pullRequests_urls) {
   const snapshot = await fdb.ref("Scores").once("value")
+
+  // Fetch the scores
   last_score = snapshot.child(username + "/finalScore").val();
   last_score = last_score ? last_score : 0;
   last_issues = snapshot.child(username + "/issues").val();
@@ -21,23 +26,28 @@ async function updateDB(username, finalScore, issues, issues_urls, pullRequests,
   last_pullRequests_urls = snapshot.child(username + "/pullRequests_urls").val();
   last_pullRequests_urls = last_pullRequests_urls ? last_pullRequests_urls : [];
 
+  // Check whether the PR is already in the list
   if (last_pullRequests_urls.includes(pullRequests_urls)) {
     return false;
   }
 
+  // Check whether the issue is already in the list
   if (last_issues_urls.includes(issues_urls)) {
     return false
   }
 
+  // Append the urls to the list
   last_issues_urls.push(issues_urls);
   last_pullRequests_urls.push(pullRequests_urls);
 
-
+  // Update the obj
   let obj = {
     "finalScore": parseInt(last_score) + parseInt(finalScore),
     "issues": last_issues + issues,
     "pullRequests": parseInt(last_pullRequests) + parseInt(pullRequests),
   }
+
+  // If last urls are not empty, then update the urls
   if (last_issues_urls.length != 0) {
     obj["issues_urls"] = last_issues_urls
   }
@@ -52,7 +62,7 @@ async function updateDB(username, finalScore, issues, issues_urls, pullRequests,
 // set up router
 module.exports = (app, { getRouter }) => {
   const router = getRouter("/api");
-  const adminUsernames = ["yashkumarverma", "avats101", "akri16", "DarthBenro008", "HelixW", "vinamrak", "atg_coder27"];
+  const adminUsernames = require("./usernames.js");
   app.log.info("Yay, the app was loaded!");
 
   // issues opened
@@ -82,13 +92,14 @@ module.exports = (app, { getRouter }) => {
   app.on("issues.labeled", async (context) => {
     const issue = context.payload.issue;
 
+    // filter labels with hacktoberfest
     let hact_labels = issue.labels.filter(obj => {
       if (obj.name == "hacktoberfest" || obj.name == "Hacktoberfest")
         return obj.name
     })
 
+    // if hacktoberfest label is present
     if (hact_labels.length > 0) {
-
       // Update the scores
       if (await updateDB(issue.user.login, scores["issue"], 1, issue.url, 0, [])) {
         comment = context.issue({
@@ -97,6 +108,7 @@ module.exports = (app, { getRouter }) => {
         return context.octokit.issues.createComment(comment)
       }
     }
+
     return
   });
 
@@ -105,6 +117,7 @@ module.exports = (app, { getRouter }) => {
     const issueComment = context.issue({
       body: "Thanks for closing this issue!",
     });
+
     const issue = context.payload.issue;
 
     // check if user is admin
@@ -112,35 +125,6 @@ module.exports = (app, { getRouter }) => {
       app.log(`Ignoring new issue ${issue.id} created by admin ${issue.user.login}`);
       return;
     }
-
-    // let timeline = await context.octokit.rest.issues.listEventsForTimeline(issueComment)
-    // let comment;
-
-    // for (let i = 0; i < timeline.data.length; i++) {
-    //   let e = timeline.data[i]
-    //   if (e.event === "connected") {
-    // let list = await context.octokit.rest.issues.listLabelsOnIssue(issueComment)
-    // data = list["data"][0]
-
-    // label = data.name
-
-    // Update the scores
-    // if (await updateDB(issue.user.login, 0, 0, [], 1, "PR")) {
-    //   console.log("db updated...")
-    //   comment = context.issue({
-    //     body: `@${issue.user.login} got ${labels[label]} Points`,
-    //   })
-
-    // }
-    // else {
-    //   comment = context.issue({
-    //     body: `PR already finalised!`,
-    //   })
-    // }
-    // context.octokit.issues.createComment(comment)
-    //     break
-    //   }
-    // }
     return context.octokit.issues.createComment(issueComment);
   });
 
@@ -148,11 +132,14 @@ module.exports = (app, { getRouter }) => {
   app.on("pull_request.opened", async (context) => {
     app.log("created PR");
     const pr = context.payload.pull_request;
+
+    // check if user is admin
     if (adminUsernames.includes(pr.user.login)) {
       app.log(`Ignoring new pr ${pr.id} opened by admin ${pr.user.login}`);
       return;
     }
 
+    // check if PR is opened
     if (!pr.closed_at) {
       app.log(`Pull Request Opened: ${pr.id}`);
 
@@ -165,34 +152,43 @@ module.exports = (app, { getRouter }) => {
     }
   });
 
+  // Pull request linked
   app.on("pull_request_review_comment.created", async (context) => {
     const pr = context.payload.pull_request_review_comment;
     app.log(`Pull request linked ${pr}`);
   });
 
-  // pr labeled
+  // Pull Request labeled
   app.on("pull_request.labeled", async (context) => {
     app.log("PR Labeled");
     const pr = context.payload.pull_request;
 
+    // If user is admin
     if (adminUsernames.includes(pr.user.login)) {
       app.log(`Ignoring new pr ${pr.id} opened by admin ${pr.user.login}`);
       return;
     }
 
+    // Iterate over the labels
     let labels = pr.labels
     let label;
     for (let i = 0; i < labels.length; i++) {
       label = labels[i].name
       console.log(label)
+
+      // If label is "approved"
       if (label == "approved") {
+
+        // Find label with format `points {score}`
         for (let j = 0; j < labels.length; j++) {
           let label_name = labels[j].name.split(" ")
+
+          // If label is points
           if (label_name[0] == "points") {
 
             let comment;
 
-            // update the scores
+            // Update the scores with {score}
             if (await updateDB(pr.user.login, label_name[1], 0, [], 1, pr.url)) {
               comment = context.issue({
                 body: `@${pr.user.login} got ${label_name[1]} points for this pull request! 🎉`,
@@ -203,25 +199,24 @@ module.exports = (app, { getRouter }) => {
                 body: `PR already finalised!`,
               })
             }
-
             context.octokit.issues.createComment(comment)
-
           }
         }
       }
     }
-
-
-
   });
 
   // pull request closed
   app.on("pull_request.closed", async (context) => {
     const pr = context.payload.pull_request;
+
+    // check if user is admin
     if (adminUsernames.includes(pr.user.login)) {
       app.log(`Ignoring pr ${pr.id} closing by admin ${pr.user.login}`);
       return;
     }
+
+    // check if PR is closed
     if (!!pr.merged_at) {
       app.log(`Pull Request Closed: ${pr.id}`);
 
@@ -233,7 +228,7 @@ module.exports = (app, { getRouter }) => {
     }
   });
 
-  // route for getting scores
+  // Route for fetching scores
   router.get("/scores", (req, res) => {
     fdb.ref('Scores').on('value', async function (snapshot) {
       let scores = snapshot.val()
@@ -247,8 +242,7 @@ module.exports = (app, { getRouter }) => {
       sorted.forEach((value) => {
         sorted_scores[value] = scores[value]
       })
-      return res.send(
-        sorted_scores);
+      return res.send(sorted_scores);
     });
   });
 };
