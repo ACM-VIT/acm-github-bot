@@ -174,7 +174,6 @@ module.exports = (app, { getRouter }) => {
     let label;
     for (let i = 0; i < labels.length; i++) {
       label = labels[i].name
-      console.log(label)
 
       // If label is "approved"
       if (label == "approved") {
@@ -232,16 +231,20 @@ module.exports = (app, { getRouter }) => {
   router.get("/scores", (req, res) => {
     fdb.ref('Scores').on('value', async function (snapshot) {
       let scores = snapshot.val()
-
-      // sort the scores
-      let sorted = Object.keys(scores).sort(function (a, b) {
-        return scores[b].finalScore - scores[a].finalScore
-      })
-
       let sorted_scores = {}
-      sorted.forEach((value) => {
-        sorted_scores[value] = scores[value]
-      })
+      try {
+        // sort the scores
+        let sorted = Object.keys(scores).sort(function (a, b) {
+          return scores[b].finalScore - scores[a].finalScore
+        })
+
+        sorted.forEach((value) => {
+          sorted_scores[value] = scores[value]
+        })
+      }
+      catch (e) {
+        console.log(e)
+      }
       return res.send(sorted_scores);
     });
   });
