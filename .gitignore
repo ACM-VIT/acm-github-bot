@@ -7,3 +7,4 @@ coverage
 lib
 config.js
 serviceAccountKey.json
+usernames.js
