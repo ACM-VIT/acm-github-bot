@@ -92,6 +92,14 @@ module.exports = (app, { getRouter }) => {
   app.on("issues.labeled", async (context) => {
     const issue = context.payload.issue;
 
+    // check if user is admin
+    if (adminUsernames.includes(issue.user.login)) {
+      app.log(
+        `Ignoring new issue ${issue.id} created by admin ${issue.user.login}`
+      );
+      return;
+    }
+
     // filter labels with hacktoberfest
     let hact_labels = issue.labels.filter(obj => {
       if (obj.name == "hacktoberfest" || obj.name == "Hacktoberfest")
