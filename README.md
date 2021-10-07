@@ -9,6 +9,12 @@
 
 ## A GitHub App built with [Probot](https://github.com/probot/probot) to manage score distribution on Open Source Projects.
 
+## Features
+-  Greetings and Points scored would be commented only for contributers
+-  For each new issue created by contributer, if the admin labels it as hacktoberfest  the contributer would be awarded with 5 points.
+-  For Pull Requests by contributers, admin must add a label with format 'points 10' to award 10 points to the contributer. 
+-  Only when approved label is added for the PR, the points will be awarded to the contributer.
+-  Api with leaderboard can be used to get the scores in JSON format. 
 
 ## Setup
 
